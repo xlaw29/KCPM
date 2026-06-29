@@ -1,0 +1,7 @@
+path: /Users/shini/Documents/TriTueNhanTao/fire_detection_project/dataset
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 2
+names: ['fire', 'smoke']
