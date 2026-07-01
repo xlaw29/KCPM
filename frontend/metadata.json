@@ -1,0 +1,6 @@
+{
+  "name": "Smart Fire Monitoring",
+  "description": "Hệ thống giám sát và báo cháy thông minh tích hợp cảnh báo bảo mật qua Zalo Security Alert",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

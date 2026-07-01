@@ -1,6 +1,24 @@
+# Python
 .venv/
-runs/
-*.cache
-*.zip
 __pycache__/
+*.pyc
+backend/.cache/
+.cache/
+
+# Runtime outputs (giu thu muc, bo file)
+backend/static/outputs/*
+!backend/static/outputs/.gitkeep
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Training
+runs/
+backend/runs/
+
+# Du lieu lon / export
+*.zip
+
+# He thong
 .DS_Store
