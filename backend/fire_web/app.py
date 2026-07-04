@@ -12,6 +12,7 @@ os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "timeout;5000000")
 from flask import Flask, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
+from . import db
 from .detector import (
     FireDetector,
     allowed_file,
@@ -87,8 +88,35 @@ def create_app(
     detector = FireDetector(model_path, confidence_threshold, imgsz=imgsz)
     output_dir = ROOT_DIR / "static" / "outputs"
     upload_dir = ROOT_DIR / ".cache" / "uploads"
+    snapshot_dir = ROOT_DIR / "static" / "snapshots"
     output_dir.mkdir(parents=True, exist_ok=True)
     upload_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    # Khoi tao CSDL SQLite (tao bang + seed tai khoan mac dinh neu chua co).
+    db.init_db()
+
+    def _severity_for(confidence: float, classes: list[str]) -> str:
+        """Suy ra muc do nghiem trong tu do tin cay va lop phat hien."""
+        if "fire" in classes and confidence >= 0.7:
+            return "critical"
+        if "fire" in classes:
+            return "high"
+        if confidence >= 0.6:
+            return "high"
+        return "medium"
+
+    def _save_snapshot(image_data_url: str | None) -> str | None:
+        """Luu anh snapshot (data URL) xuong dia, tra ve duong dan cong khai."""
+        if not isinstance(image_data_url, str) or not image_data_url.startswith("data:image/"):
+            return None
+        try:
+            image_bytes = decode_data_url(image_data_url)
+        except ValueError:
+            return None
+        filename = f"snap-{uuid4().hex}.jpg"
+        (snapshot_dir / filename).write_bytes(image_bytes)
+        return f"/static/snapshots/{filename}"
 
     # Cho phep React (chay o cong khac) goi API; voi Vite proxy thi cung an toan.
     @app.after_request
@@ -313,6 +341,88 @@ def create_app(
             return jsonify({"ok": False, "error": f"HTTP {exc.code}: {detail}"}), 200
         except Exception as exc:  # noqa: BLE001
             return jsonify({"ok": False, "error": str(exc)}), 200
+
+    # ------------------------------------------------------------------ #
+    # Tai khoan (dang ky / dang nhap) - luu vao SQLite
+    # ------------------------------------------------------------------ #
+    @app.post("/api/auth/register")
+    def auth_register():
+        payload = request.get_json(silent=True) or {}
+        email = str(payload.get("email") or "").strip()
+        password = str(payload.get("password") or "")
+        username = str(payload.get("username") or "").strip()
+        full_name = str(payload.get("full_name") or "").strip()
+        try:
+            user = db.create_user(email, password, username=username, full_name=full_name)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True, "user": user}), 201
+
+    @app.post("/api/auth/login")
+    def auth_login():
+        payload = request.get_json(silent=True) or {}
+        email = str(payload.get("email") or payload.get("username") or "").strip()
+        password = str(payload.get("password") or "")
+        user = db.verify_user(email, password)
+        if user is None:
+            return jsonify({"ok": False, "error": "Sai email hoặc mật khẩu."}), 401
+        return jsonify({"ok": True, "user": user})
+
+    @app.get("/api/users")
+    def list_users():
+        return jsonify({"users": db.list_users()})
+
+    # ------------------------------------------------------------------ #
+    # Lich su phat hien chay/khoi - luu vao SQLite
+    # ------------------------------------------------------------------ #
+    @app.get("/api/detections")
+    def get_detections():
+        limit = request.args.get("limit", default=100, type=int)
+        offset = request.args.get("offset", default=0, type=int)
+        type_filter = request.args.get("type") or None
+        ack_arg = request.args.get("acknowledged")
+        ack = None
+        if ack_arg is not None:
+            ack = ack_arg.lower() in {"1", "true", "yes"}
+        rows = db.list_detections(limit=limit, offset=offset, type=type_filter, acknowledged=ack)
+        return jsonify({"detections": rows})
+
+    @app.post("/api/detections")
+    def create_detection():
+        payload = request.get_json(silent=True) or {}
+        classes = payload.get("detected_classes") or []
+        if not isinstance(classes, list):
+            classes = []
+        det_type = str(payload.get("type") or (classes[0] if classes else "fire"))
+        confidence = payload.get("confidence")
+        confidence = float(confidence) if isinstance(confidence, (int, float)) else 0.0
+        severity = str(payload.get("severity") or _severity_for(confidence, classes))
+        image_path = _save_snapshot(payload.get("image"))
+        record = db.insert_detection(
+            type=det_type,
+            confidence=confidence,
+            camera_name=str(payload.get("camera_name") or ""),
+            severity=severity,
+            detected_classes=[str(c) for c in classes],
+            box_count=int(payload.get("box_count") or 0),
+            image_path=image_path,
+            source=str(payload.get("source") or "camera"),
+            user_id=payload.get("user_id"),
+        )
+        return jsonify({"ok": True, "detection": record}), 201
+
+    @app.post("/api/detections/<int:detection_id>/acknowledge")
+    def ack_detection(detection_id):
+        payload = request.get_json(silent=True) or {}
+        operator = str(payload.get("operator") or payload.get("acknowledged_by") or "")
+        record = db.acknowledge_detection(detection_id, operator)
+        if record is None:
+            return jsonify({"error": "Không tìm thấy sự kiện."}), 404
+        return jsonify({"ok": True, "detection": record})
+
+    @app.get("/api/stats")
+    def get_stats():
+        return jsonify(db.detection_stats())
 
     @app.errorhandler(ValueError)
     def value_error(exc):

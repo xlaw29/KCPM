@@ -132,6 +132,36 @@ Token chỉ lưu trong trình duyệt, **không** nằm trong mã nguồn.
 | `POST /api/detect-upload` | Nhận ảnh/video → xử lý cả file |
 | `POST /api/detect-ip` | Nhận dạng từ camera IP (điện thoại) |
 | `POST /api/telegram/send` | Gửi cảnh báo Telegram (kèm ảnh) |
+| `POST /api/auth/register` | Đăng ký tài khoản mới (lưu vào CSDL) |
+| `POST /api/auth/login` | Đăng nhập (kiểm tra với CSDL) |
+| `GET  /api/users` | Danh sách tài khoản |
+| `GET  /api/detections` | Lịch sử phát hiện (lọc `?type=`, `?acknowledged=`, `?limit=`) |
+| `POST /api/detections` | Lưu 1 sự kiện phát hiện cháy/khói (kèm snapshot) |
+| `POST /api/detections/<id>/acknowledge` | Xác nhận (duyệt) một sự kiện |
+| `GET  /api/stats` | Thống kê nhanh cho dashboard |
+
+## 🗄️ Cơ sở dữ liệu (SQLite)
+
+Hệ thống lưu **tài khoản** và **lịch sử phát hiện cháy/khói** trong một file **SQLite**
+(`backend/data/fire_detection.db`) — dùng `sqlite3` sẵn trong Python, **không cần cài
+thêm** phần mềm CSDL nào. File tự tạo lần đầu chạy backend.
+
+**2 bảng chính:**
+
+| Bảng | Nội dung |
+|---|---|
+| `users` | Tài khoản: email, mật khẩu (băm PBKDF2-SHA256 + salt), họ tên, vai trò, thời điểm tạo/đăng nhập |
+| `detections` | Mỗi lần phát hiện: loại (cháy/khói), độ tin cậy, mức độ, camera, số box, ảnh snapshot, đã xác nhận hay chưa, thời gian |
+
+**Tài khoản mặc định** (tự tạo lần đầu):
+
+| Email / Tên đăng nhập | Mật khẩu | Vai trò |
+|---|---|---|
+| `admin` | `admin123` | admin |
+| `sinh@gmail.com` | `111111` | operator |
+
+Ảnh snapshot của mỗi cảnh báo được lưu ở `backend/static/snapshots/`. Cả file CSDL và
+thư mục snapshot đều đã được `.gitignore` bỏ qua (dữ liệu runtime, không commit).
 
 ## Biến môi trường (tùy chọn)
 

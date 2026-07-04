@@ -8,6 +8,11 @@ backend/.cache/
 # Runtime outputs (giu thu muc, bo file)
 backend/static/outputs/*
 !backend/static/outputs/.gitkeep
+backend/static/snapshots/*
+!backend/static/snapshots/.gitkeep
+
+# CSDL SQLite (tao khi chay, khong commit)
+backend/data/
 
 # Node / frontend
 frontend/node_modules/

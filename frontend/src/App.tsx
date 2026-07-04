@@ -21,12 +21,14 @@ import HistoryView from './components/HistoryView';
 import TelegramConfigView from './components/TelegramConfigView';
 import SettingsView from './components/SettingsView';
 import { INITIAL_ALERTS } from './components/MockData';
-import { sendTelegram } from './api';
+import { sendTelegram, saveDetection, AccountUser } from './api';
 import { Siren, AlertTriangle, ShieldCheck, X, CheckCircle } from 'lucide-react';
 
 export default function App() {
   // Authentication status
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Tai khoan dang dang nhap (lay tu CSDL).
+  const [currentUser, setCurrentUser] = useState<AccountUser | null>(null);
   
   // App navigation tabs
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.DASHBOARD);
@@ -90,6 +92,20 @@ export default function App() {
   const handleAddAlert = (newAlert: AlertEvent) => {
     setAlerts(prev => [newAlert, ...prev]);
     triggerToast(`[CẢNH BÁO MỚI] Phát hiện ${newAlert.type === 'fire' ? 'Lửa' : 'Khói'} tại ${newAlert.cameraName}!`, 'warn');
+
+    // Luu co dinh su kien vao CSDL SQLite o backend.
+    const severityMap: Record<string, number> = { critical: 0.9, high: 0.75, medium: 0.55, low: 0.4 };
+    saveDetection({
+      type: newAlert.type,
+      confidence: severityMap[newAlert.severity] ?? 0.5,
+      camera_name: newAlert.cameraName,
+      detected_classes: [newAlert.type],
+      source: 'camera',
+      image: newAlert.imageUrl?.startsWith('data:image/') ? newAlert.imageUrl : undefined,
+      user_id: currentUser?.id,
+    }).catch(() => {
+      // khong chan luong neu backend loi; chi bo qua viec luu.
+    });
   };
 
   const handleAcknowledgeAlert = (id: string, operatorName: string) => {
@@ -219,9 +235,10 @@ export default function App() {
 
   // If user is not logged in, show Login View (Screen 1)
   if (!isLoggedIn) {
-    return <LoginView onLogin={() => {
+    return <LoginView onLogin={(user) => {
+      setCurrentUser(user);
       setIsLoggedIn(true);
-      triggerToast('Chào mừng quản trị viên đã đăng nhập hệ thống Smart Fire!', 'success');
+      triggerToast(`Chào mừng ${user.full_name || user.email} đã đăng nhập hệ thống Smart Fire!`, 'success');
     }} />;
   }
 
@@ -240,6 +257,7 @@ export default function App() {
         onEmergencyTrigger={handleTriggerEmergency}
         onLogout={() => {
           setIsLoggedIn(false);
+          setCurrentUser(null);
           setActiveTab(AppTab.DASHBOARD);
         }}
       />

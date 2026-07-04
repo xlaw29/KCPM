@@ -5,34 +5,39 @@
 
 import React, { useState } from 'react';
 import { Video, Flame, User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { login, AccountUser } from '../api';
 
 interface LoginViewProps {
-  onLogin: () => void;
+  onLogin: (user: AccountUser) => void;
 }
 
 export default function LoginView({ onLogin }: LoginViewProps) {
-  const [username, setUsername] = useState('nhanvien@congty.com');
-  const [password, setPassword] = useState('password123');
+  const [username, setUsername] = useState('sinh@gmail.com');
+  const [password, setPassword] = useState('111111');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setErrorMessage('Vui lòng nhập đầy đủ tài khoản và mật khẩu.');
       return;
     }
-    
+
     setIsLoading(true);
     setErrorMessage('');
-    
-    // Simulate high-tech server validation
-    setTimeout(() => {
+
+    try {
+      // Dang nhap that su: kiem tra voi CSDL o backend.
+      const user = await login(username.trim(), password);
       setIsLoading(false);
-      onLogin();
-    }, 1200);
+      onLogin(user);
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMessage(err instanceof Error ? err.message : 'Đăng nhập thất bại.');
+    }
   };
 
   return (

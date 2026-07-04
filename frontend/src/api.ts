@@ -135,3 +135,123 @@ export async function sendTelegram(params: {
   if (!res.ok) throw new Error(data.error || 'Loi gui Telegram.');
   return data as TelegramSendResult;
 }
+
+// ---------------------------------------------------------------------------
+// Tai khoan (luu trong SQLite o backend)
+// ---------------------------------------------------------------------------
+export interface AccountUser {
+  id: number;
+  email: string;
+  username: string | null;
+  full_name: string | null;
+  role: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+/** Dang nhap that su (kiem tra voi CSDL). */
+export async function login(email: string, password: string): Promise<AccountUser> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({email, password}),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'Đăng nhập thất bại.');
+  return data.user as AccountUser;
+}
+
+/** Dang ky tai khoan moi. */
+export async function register(params: {
+  email: string;
+  password: string;
+  username?: string;
+  full_name?: string;
+}): Promise<AccountUser> {
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'Đăng ký thất bại.');
+  return data.user as AccountUser;
+}
+
+// ---------------------------------------------------------------------------
+// Lich su phat hien chay/khoi (luu trong SQLite o backend)
+// ---------------------------------------------------------------------------
+export interface DetectionRecord {
+  id: number;
+  user_id: number | null;
+  camera_name: string;
+  type: 'fire' | 'smoke' | 'suspect';
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  confidence: number;
+  detected_classes: string[];
+  box_count: number;
+  image_path: string | null;
+  source: string;
+  acknowledged: boolean;
+  acknowledged_by: string | null;
+  created_at: string;
+}
+
+/** Luu 1 su kien phat hien chay/khoi xuong CSDL. */
+export async function saveDetection(params: {
+  type: string;
+  confidence: number;
+  camera_name?: string;
+  detected_classes?: string[];
+  box_count?: number;
+  source?: string;
+  image?: string; // data URL anh da ve box (tuy chon)
+  user_id?: number;
+}): Promise<DetectionRecord> {
+  const res = await fetch('/api/detections', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi lưu phát hiện.');
+  return data.detection as DetectionRecord;
+}
+
+/** Lay danh sach phat hien tu CSDL. */
+export async function listDetections(limit = 100): Promise<DetectionRecord[]> {
+  const res = await fetch(`/api/detections?limit=${limit}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi tải lịch sử.');
+  return data.detections as DetectionRecord[];
+}
+
+/** Xac nhan (duyet) 1 su kien. */
+export async function acknowledgeDetection(
+  id: number,
+  operator: string,
+): Promise<DetectionRecord> {
+  const res = await fetch(`/api/detections/${id}/acknowledge`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({operator}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi xác nhận sự kiện.');
+  return data.detection as DetectionRecord;
+}
+
+export interface DetectionStats {
+  total: number;
+  today: number;
+  unacknowledged: number;
+  by_type: Record<string, number>;
+}
+
+/** Thong ke nhanh cho dashboard. */
+export async function fetchStats(): Promise<DetectionStats> {
+  const res = await fetch('/api/stats');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi tải thống kê.');
+  return data as DetectionStats;
+}
