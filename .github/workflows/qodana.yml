@@ -35,6 +35,9 @@ jobs:
           args: --only-directory backend --config qodana-backend.yaml
           artifact-name: qodana-backend
           upload-result: true
+          # pr-mode phân tích commit merge-base; nếu file cấu hình mới được thêm
+          # trong chính PR đó thì Qodana không thấy -> tắt để quét commit head.
+          pr-mode: false
         env:
           # Community linter không bắt buộc token. Thêm secret nếu muốn đẩy
           # báo cáo lên Qodana Cloud.
@@ -61,5 +64,6 @@ jobs:
           args: --only-directory frontend --config qodana-frontend.yaml
           artifact-name: qodana-frontend
           upload-result: true
+          pr-mode: false
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_FRONTEND }}
