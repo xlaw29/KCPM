@@ -22,6 +22,9 @@ frontend/dist/
 runs/
 backend/runs/
 
+# Qodana (ket qua quet local)
+.qodana/
+
 # Du lieu lon / export
 *.zip
 

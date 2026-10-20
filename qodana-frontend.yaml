@@ -1,0 +1,20 @@
+version: "1.0"
+
+# Qodana for JS — CHỈ chạy được với license Ultimate/Ultimate Plus.
+# Xem docs/qodana.md để biết cách bật job này trên GitHub Actions.
+linter: jetbrains/qodana-js:2026.2
+
+# Cài node_modules để Qodana phân giải import/type của React + TypeScript.
+bootstrap: |
+  npm ci --prefix frontend --no-audit --no-fund
+
+profile:
+  name: qodana.recommended
+
+exclude:
+  - name: Dependencies và build output
+    paths:
+      - frontend/node_modules
+      - frontend/dist
+      - frontend/package-lock.json
+      - "**/*.min.js"
