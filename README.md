@@ -1,5 +1,7 @@
 # Smart Fire Monitoring — Hệ thống giám sát phát hiện cháy/khói bằng AI
 
+[![Qodana](https://github.com/xlaw29/KCPM/actions/workflows/qodana.yml/badge.svg)](https://github.com/xlaw29/KCPM/actions/workflows/qodana.yml)
+
 Phát hiện **cháy/khói** thời gian thực bằng model **YOLOv8** (`backend/model/best.pt`),
 hiển thị trên giao diện web **Smart Fire Monitoring** (React). Hỗ trợ camera máy tính,
 camera điện thoại (IP), tải ảnh/video, vẽ bounding box, tự sinh cảnh báo và gửi **Telegram**.

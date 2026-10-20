@@ -111,4 +111,8 @@ with:
 - `permissions` của workflow cần `checks: write` + `pull-requests: write` để Qodana
   gắn annotation và comment lên PR.
 - Qodana chỉ **đọc** code, không chạy code dự án; `bootstrap` chỉ cài thư viện.
+- Qodana mặc định có thể dùng language level Python cũ và báo sai (`Invalid type annotation`)
+  với cú pháp `str | Path`, `dict[str, Any]`… Workflow đã đặt `QODANA_PYTHON_PATH` trỏ tới
+  Python 3.12 của container để tránh false positive này. Khi chạy local bằng Docker, thêm:
+  `qodana scan ... -e QODANA_PYTHON_PATH=/opt/miniconda3/bin/python3`.
 - Nếu repo dùng hết quota GitHub Actions, có thể tạm tắt workflow trong tab **Actions**.
