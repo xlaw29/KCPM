@@ -1,0 +1,32 @@
+version: "1.0"
+
+# Qodana Community for Python — miễn phí, không cần QODANA_TOKEN.
+# Chạy local:
+#   qodana scan --only-directory backend --config qodana-backend.yaml
+linter: jetbrains/qodana-python-community:2026.2
+
+# Cài dependency để Qodana phân giải import (Qodana chỉ đọc code, không chạy code).
+# Cố ý KHÔNG cài full backend/requirements.txt: ultralytics kéo theo PyTorch ~1 GB
+# mỗi lần chạy CI. Chỉ cần package xuất hiện trong môi trường là đủ để resolve import.
+bootstrap: |
+  pip install --no-cache-dir --quiet flask numpy opencv-python-headless
+  pip install --no-cache-dir --quiet --no-deps ultralytics
+
+profile:
+  name: qodana.recommended
+
+exclude:
+  - name: Du lieu, model va thu muc sinh tu dong
+    paths:
+      - backend/data
+      - backend/model
+      - backend/runs
+      - backend/static/outputs
+      - backend/static/snapshots
+      - dataset
+      - test-media
+      - KCPM-main
+      - frontend/node_modules
+      - frontend/dist
+      - "**/__pycache__"
+      - "**/.venv"
