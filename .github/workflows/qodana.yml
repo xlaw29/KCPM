@@ -38,10 +38,14 @@ jobs:
           # pr-mode phân tích commit merge-base; nếu file cấu hình mới được thêm
           # trong chính PR đó thì Qodana không thấy -> tắt để quét commit head.
           pr-mode: false
+          # Chuyển QODANA_PYTHON_PATH vào container linter để Qodana dùng Python
+          # 3.12 (mặc định container) => nhận đúng cú pháp type hint 3.10+.
+          env-vars-to-linter: QODANA_PYTHON_PATH
         env:
           # Community linter không bắt buộc token. Thêm secret nếu muốn đẩy
           # báo cáo lên Qodana Cloud.
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_BACKEND }}
+          QODANA_PYTHON_PATH: /opt/miniconda3/bin/python3
 
   frontend:
     name: Qodana · Frontend (JS/TS)
