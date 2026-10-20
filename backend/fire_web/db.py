@@ -5,7 +5,6 @@ File CSDL nam o backend/data/fire_detection.db.
 """
 
 import hashlib
-import os
 import secrets
 import sqlite3
 import threading

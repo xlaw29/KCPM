@@ -1,0 +1,73 @@
+name: Qodana
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: qodana-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  backend:
+    name: Qodana · Backend (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Với pull_request: phân tích đúng commit của PR, không phải merge commit
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2026.2
+        with:
+          args: --only-directory backend --config qodana-backend.yaml
+          artifact-name: qodana-backend
+          upload-result: true
+          # pr-mode phân tích commit merge-base; nếu file cấu hình mới được thêm
+          # trong chính PR đó thì Qodana không thấy -> tắt để quét commit head.
+          pr-mode: false
+          # Chuyển QODANA_PYTHON_PATH vào container linter để Qodana dùng Python
+          # 3.12 (mặc định container) => nhận đúng cú pháp type hint 3.10+.
+          env-vars-to-linter: QODANA_PYTHON_PATH
+        env:
+          # Community linter không bắt buộc token. Thêm secret nếu muốn đẩy
+          # báo cáo lên Qodana Cloud.
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_BACKEND }}
+          QODANA_PYTHON_PATH: /opt/miniconda3/bin/python3
+
+  frontend:
+    name: Qodana · Frontend (JS/TS)
+    # qodana-js cần license Ultimate. Bật job này bằng cách tạo:
+    #   Repository variable: QODANA_JS_ENABLED = true
+    #   Repository secret:   QODANA_TOKEN_FRONTEND = <token Qodana Cloud>
+    if: vars.QODANA_JS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2026.2
+        with:
+          args: --only-directory frontend --config qodana-frontend.yaml
+          artifact-name: qodana-frontend
+          upload-result: true
+          pr-mode: false
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_FRONTEND }}

@@ -1,5 +1,7 @@
 # Smart Fire Monitoring — Hệ thống giám sát phát hiện cháy/khói bằng AI
 
+[![Qodana](https://github.com/xlaw29/KCPM/actions/workflows/qodana.yml/badge.svg)](https://github.com/xlaw29/KCPM/actions/workflows/qodana.yml)
+
 Phát hiện **cháy/khói** thời gian thực bằng model **YOLOv8** (`backend/model/best.pt`),
 hiển thị trên giao diện web **Smart Fire Monitoring** (React). Hỗ trợ camera máy tính,
 camera điện thoại (IP), tải ảnh/video, vẽ bounding box, tự sinh cảnh báo và gửi **Telegram**.
@@ -180,3 +182,15 @@ yolo detect train model=yolov8s.pt data=dataset/data.yaml epochs=100 imgsz=1280 
 Nhớ sửa dòng `path:` trong `dataset/data.yaml` cho đúng máy GPU. Train xong copy
 `runs/detect/train/weights/best.pt` về `backend/model/best.pt`, khởi động lại backend.
 ```
+
+## 🔍 Kiểm tra chất lượng mã nguồn (Qodana)
+
+Repo đã tích hợp **Qodana** — static analysis của JetBrains — chạy tự động trên
+GitHub Actions mỗi khi push/PR vào `main`.
+
+- Backend (Python): dùng `qodana-python-community` — **miễn phí**, chạy mặc định.
+- Frontend (JS/TS): dùng `qodana-js` — cần license Ultimate, bật bằng biến
+  `QODANA_JS_ENABLED=true`.
+
+Cấu hình: `qodana-backend.yaml`, `qodana-frontend.yaml`, `.github/workflows/qodana.yml`.
+Hướng dẫn chi tiết (xem báo cáo, chạy local, quality gate): **[docs/qodana.md](docs/qodana.md)**.
