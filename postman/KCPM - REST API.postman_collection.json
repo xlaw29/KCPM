@@ -1,0 +1,218 @@
+{
+  "info": {
+    "_postman_id": "c0345df8-3a6b-43db-b878-47ded68a0155",
+    "name": "KCPM - REST API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "59093279",
+    "_collection_link": "https://go.postman.co/collection/59093279-c0345df8-3a6b-43db-b878-47ded68a0155?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "01 - Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "02 - Register",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"email\": \"testkcpm01@gmail.com\",\r\n  \"password\": \"123456\",\r\n  \"username\": \"testkcpm01\",\r\n  \"full_name\": \"Test KCPM\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "03 - Login",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"email\": \"testkcpm01@gmail.com\",\r\n  \"password\": \"123456\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "04 - Get Detections",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/detections",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detections"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "05 - Create Detection",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"type\": \"fire\",\r\n  \"confidence\": 0.92,\r\n  \"severity\": \"critical\",\r\n  \"camera_name\": \"Camera 01\",\r\n  \"detected_classes\": [\"fire\"],\r\n  \"box_count\": 1,\r\n  \"source\": \"upload\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/detections",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detections"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "06 - Acknowledge Detection",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"acknowledged_by\": \"testkcpm01\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/detections/1/acknowledge",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detections",
+            "1",
+            "acknowledge"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "07 - Detection Statistics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/stats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "stats"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "08 - Detect Upload Image",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "\r\npm.test(\"Status code is 200\", function () {\r\n    pm.response.to.have.status(200);\r\n});\r\n\r\npm.test(\"Response contains detections array\", function () {\r\n    const response = pm.response.json();\r\n    pm.expect(response.detections).to.be.an(\"array\");\r\n});\r\n\r\npm.test(\"AI detected fire\", function () {\r\n    const response = pm.response.json();\r\n\r\n    const fireDetected = response.detections.some(\r\n        item => item.class_name === \"fire\"\r\n    );\r\n\r\n    pm.expect(fireDetected).to.be.true;\r\n});\r\n\r\npm.test(\"Fire confidence >= 0.45\", function () {\r\n    const response = pm.response.json();\r\n\r\n    const fire = response.detections.find(\r\n        item => item.class_name === \"fire\"\r\n    );\r\n\r\n    pm.expect(fire).to.exist;\r\n    pm.expect(fire.confidence).to.be.at.least(0.45);\r\n});\r\n"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [
+                "postman-cloud:///1f1ccf6d-9cd7-4d60-8f7c-d0e61479dccf"
+              ]
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/detect-upload",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detect-upload"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
