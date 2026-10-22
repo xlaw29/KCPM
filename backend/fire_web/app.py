@@ -231,12 +231,12 @@ def create_app(
                         "error": "Không kết nối được camera IP. Kiểm tra URL và đảm bảo điện thoại cùng wifi với máy tính."
                     }
                 ),
-                200,
+                502,
             )
 
         ok, buffer = cv2.imencode(".jpg", frame)
         if not ok:
-            return jsonify({"error": "Không đọc được khung hình từ camera IP."}), 200
+            return jsonify({"error": "Không đọc được khung hình từ camera IP."}), 500
 
         result = detector.detect_image_bytes(buffer.tobytes(), conf=conf_value)
         result["result_type"] = "image"
