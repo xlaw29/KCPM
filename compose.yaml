@@ -1,0 +1,23 @@
+﻿services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: "5001"
+      FIRE_MODEL_PATH: /app/model/best.pt
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      FIRE_API_URL: http://backend:5001
+    depends_on:
+      - backend
+    restart: unless-stopped
