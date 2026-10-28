@@ -112,7 +112,7 @@ class DetectIpBvaTest(unittest.TestCase):
     # ------------------------------------------------------------------ #
     # Nhom 2: bien cua `conf` [0.05, 0.95]
     # ------------------------------------------------------------------ #
-    def _post_conf_ok(self, conf=MISSING):
+    def _post_conf_ok(self, value=MISSING):
         """Goi API voi camera gia + detector gia, tra ve (response, tham so bat duoc)."""
         captured = {"called": False, "conf": MISSING}
 
@@ -122,8 +122,8 @@ class DetectIpBvaTest(unittest.TestCase):
             return dict(SUCCESS_RESULT)
 
         payload = {"url": CAMERA_URL}
-        if conf is not MISSING:
-            payload["conf"] = conf
+        if value is not MISSING:
+            payload["conf"] = value
 
         with (
             patch.object(app_module, "_read_ip_frame", return_value=fake_frame()),
