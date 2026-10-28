@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import threading
 import urllib.error
@@ -29,6 +30,12 @@ SAMPLE_VIDEO_PATH = ROOT_DIR / "media" / "sample.mp4"
 ZALO_SEND_URL = "https://openapi.zalo.me/v3.0/oa/message/cs"
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 
+# Mien hop le cua `conf` va thong bao loi dung chung cho cac API nhan dien.
+CONF_MIN = 0.05
+CONF_MAX = 0.95
+CONF_ERROR = "Giá trị conf không hợp lệ: phải là số trong khoảng 0.05 - 0.95."
+_UNSET = object()
+
 # Quan ly ket noi camera IP (dien thoai) - giu cap mo san de doc nhanh.
 _ip_caps: dict[str, "object"] = {}
 _ip_lock = threading.Lock()
@@ -52,6 +59,20 @@ def _read_ip_frame(url: str):
             _ip_caps.pop(url, None)
             return None
         return frame
+
+
+def _parse_conf(payload: dict) -> float | None:
+    """Kiem tra `conf`: khong gui -> None (dung mac dinh), sai kieu -> ValueError."""
+    conf = payload.get("conf", _UNSET)
+    if conf is _UNSET:
+        return None
+    # bool la lop con cua int trong Python nen phai loai rieng.
+    if conf is None or isinstance(conf, bool) or not isinstance(conf, (int, float)):
+        raise ValueError(CONF_ERROR)
+    value = float(conf)
+    if not math.isfinite(value):
+        raise ValueError(CONF_ERROR)
+    return max(CONF_MIN, min(CONF_MAX, value))
 
 
 def _encode_multipart(
@@ -199,10 +220,10 @@ def create_app(
         if not isinstance(image_data, str):
             return jsonify({"error": "Missing image data URL."}), 400
 
-        conf = payload.get("conf")
-        conf_value = None
-        if isinstance(conf, (int, float)):
-            conf_value = max(0.05, min(0.95, float(conf)))
+        try:
+            conf_value = _parse_conf(payload)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         image_bytes = decode_data_url(image_data)
         result = detector.detect_image_bytes(image_bytes, conf=conf_value)
@@ -218,10 +239,10 @@ def create_app(
         if not url:
             return jsonify({"error": "Thiếu URL camera IP."}), 400
 
-        conf = payload.get("conf")
-        conf_value = None
-        if isinstance(conf, (int, float)):
-            conf_value = max(0.05, min(0.95, float(conf)))
+        try:
+            conf_value = _parse_conf(payload)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         frame = _read_ip_frame(url)
         if frame is None:
