@@ -34,7 +34,7 @@ push / pull_request / workflow_dispatch
   chạy); chỉ cài `flask`, `numpy`, `opencv-python-headless` và `ultralytics --no-deps`
   — đủ để resolve import.
 - `exclude`: bỏ qua `dataset/`, `test-media/`, `backend/model/`, `backend/data/`,
-  `node_modules/`, thư mục lồng `KCPM-main/`, `__pycache__`, `.venv`…
+  `node_modules/`, `__pycache__`, `.venv`…
 
 ## Xem kết quả
 
