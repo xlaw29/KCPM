@@ -195,6 +195,11 @@ export interface DetectionRecord {
   acknowledged: boolean;
   acknowledged_by: string | null;
   created_at: string;
+  // Nhat ky gui canh bao Telegram.
+  telegram_status: 'none' | 'pending' | 'sent' | 'failed';
+  telegram_chat_id: string | null;
+  telegram_error: string | null;
+  telegram_sent_at: string | null;
 }
 
 /** Luu 1 su kien phat hien chay/khoi xuong CSDL. */
@@ -202,11 +207,13 @@ export async function saveDetection(params: {
   type: string;
   confidence: number;
   camera_name?: string;
+  severity?: string;
   detected_classes?: string[];
   box_count?: number;
   source?: string;
   image?: string; // data URL anh da ve box (tuy chon)
   user_id?: number;
+  telegram_status?: 'none' | 'pending';
 }): Promise<DetectionRecord> {
   const res = await fetch('/api/detections', {
     method: 'POST',
@@ -218,12 +225,65 @@ export async function saveDetection(params: {
   return data.detection as DetectionRecord;
 }
 
-/** Lay danh sach phat hien tu CSDL. */
-export async function listDetections(limit = 100): Promise<DetectionRecord[]> {
-  const res = await fetch(`/api/detections?limit=${limit}`);
+export interface DetectionFilters {
+  limit?: number;
+  offset?: number;
+  type?: string;
+  severity?: string;
+  camera?: string;
+  q?: string;
+  acknowledged?: boolean;
+}
+
+export interface DetectionPage {
+  detections: DetectionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Lay danh sach su kien canh bao tu CSDL (co loc + phan trang). */
+export async function listDetections(filters: DetectionFilters = {}): Promise<DetectionPage> {
+  const query = new URLSearchParams();
+  if (filters.limit !== undefined) query.set('limit', String(filters.limit));
+  if (filters.offset !== undefined) query.set('offset', String(filters.offset));
+  if (filters.type) query.set('type', filters.type);
+  if (filters.severity) query.set('severity', filters.severity);
+  if (filters.camera) query.set('camera', filters.camera);
+  if (filters.q) query.set('q', filters.q);
+  if (filters.acknowledged !== undefined) {
+    query.set('acknowledged', filters.acknowledged ? 'true' : 'false');
+  }
+  const qs = query.toString();
+  const res = await fetch(`/api/detections${qs ? `?${qs}` : ''}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Lỗi tải lịch sử.');
-  return data.detections as DetectionRecord[];
+  return data as DetectionPage;
+}
+
+/** Lay chi tiet 1 su kien canh bao. */
+export async function getDetection(id: number): Promise<DetectionRecord> {
+  const res = await fetch(`/api/detections/${id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi tải chi tiết sự kiện.');
+  return data.detection as DetectionRecord;
+}
+
+/** Ghi nhan ket qua gui Telegram cua 1 su kien canh bao. */
+export async function reportTelegramResult(params: {
+  id: number;
+  ok: boolean;
+  error?: string;
+  chatId?: string;
+}): Promise<DetectionRecord> {
+  const res = await fetch(`/api/detections/${params.id}/telegram`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ok: params.ok, error: params.error, chat_id: params.chatId}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi lưu kết quả gửi Telegram.');
+  return data.detection as DetectionRecord;
 }
 
 /** Xac nhan (duyet) 1 su kien. */

@@ -26,10 +26,16 @@ import { Camera, AlertEvent, AppTab, SystemSettings, TelegramConfig } from '../t
 import {
   detectFrame,
   detectIp,
-  sendTelegram,
   Detection,
   checkHealth,
 } from '../api';
+import {
+  ALERT_COOLDOWN_MS,
+  classifySeverity,
+  evaluateAlert,
+  isCooldownElapsed,
+  isTelegramReady,
+} from '../alerts';
 
 type SourceMode = 'webcam' | 'ip' | 'upload';
 type CamKind = 'device' | 'ip';
@@ -43,10 +49,8 @@ interface CameraMonitorViewProps {
   setActiveTab: (tab: AppTab) => void;
   systemSettings: SystemSettings;
   telegramConfig: TelegramConfig;
-  onNotify: (message: string, type?: 'success' | 'warn' | 'info') => void;
 }
 
-const ALERT_COOLDOWN_MS = 8000;
 const DETECT_INTERVAL_MS = 800;
 
 export default function CameraMonitorView({
@@ -58,7 +62,6 @@ export default function CameraMonitorView({
   setActiveTab,
   systemSettings,
   telegramConfig,
-  onNotify,
 }: CameraMonitorViewProps) {
   const [sourceMode, setSourceMode] = useState<SourceMode>('webcam');
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -246,33 +249,18 @@ export default function CameraMonitorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMonitoring, sourceMode, uploadIsImage, fireThreshold, smokeThreshold]);
 
-  const evaluateAlert = (dets: Detection[]) => {
-    let alert = false;
-    let highest = 0;
-    const triggered: string[] = [];
-    for (const d of dets) {
-      const name = d.class_name.toLowerCase();
-      const threshold = name === 'fire' ? fireThreshold : name === 'smoke' ? smokeThreshold : 1;
-      if (name === 'fire' || name === 'smoke') {
-        highest = Math.max(highest, d.confidence);
-        if (d.confidence >= threshold) {
-          alert = true;
-          if (!triggered.includes(name)) triggered.push(name);
-        }
-      }
-    }
-    return { alert, highest, triggered };
-  };
-
   // Xu ly ket qua nhan dien chung (dung cho ca webcam va IP)
   function applyResult(result: { detections: Detection[]; image: string }) {
     setBackendError(null);
     setDetections(result.detections);
     setDisplayImage(result.image);
-    const { alert, highest, triggered } = evaluateAlert(result.detections);
+    const { alert, highest, triggered } = evaluateAlert(result.detections, {
+      fire: fireThreshold,
+      smoke: smokeThreshold,
+    });
     setHighestConf(highest);
     setIsAlert(alert);
-    if (alert && Date.now() - lastAlertRef.current > ALERT_COOLDOWN_MS) {
+    if (alert && isCooldownElapsed(lastAlertRef.current, Date.now(), ALERT_COOLDOWN_MS)) {
       lastAlertRef.current = Date.now();
       raiseAlert(triggered, highest, result.image);
     }
@@ -335,40 +323,22 @@ export default function CameraMonitorView({
   function raiseAlert(triggered: string[], highest: number, annotatedImage: string) {
     const type: AlertEvent['type'] = triggered.includes('fire') ? 'fire' : 'smoke';
     const now = new Date();
+    const willNotify = isTelegramReady(telegramConfig);
     const alertEvent: AlertEvent = {
       id: `${type === 'fire' ? 'FIRE' : 'SMOK'}-${Math.floor(1000 + Math.random() * 9000)}`,
       timestamp: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       cameraName: `${activeCamId} (${activeCamLabel})`,
       type,
-      severity: type === 'fire' ? 'critical' : 'high',
-      zaloStatus: telegramConfig.autoSendEnabled ? 'Đang gửi Telegram...' : 'Không cấu hình gửi',
+      severity: classifySeverity(triggered, highest),
+      zaloStatus: willNotify ? 'Đang gửi Telegram...' : 'Chưa bật gửi Telegram',
       zaloSuccess: 'none',
       acknowledged: false,
       imageUrl: annotatedImage,
+      confidence: highest,
     };
+    // App tu luu su kien vao CSDL va gui Telegram (kem nhat ky trang thai).
     onAddAlert(alertEvent);
-
-    const label = type === 'fire' ? 'LỬA/CHÁY' : 'KHÓI';
-    const message =
-      `🔥 CẢNH BÁO ${label} tại ${activeCamId} (${activeCamLabel}). ` +
-      `Độ tin cậy ${Math.round(highest * 100)}%. Thời gian ${alertEvent.timestamp} ${alertEvent.date}. ` +
-      `Vui lòng kiểm tra ngay!`;
-
-    // Tu dong gui Telegram (kem anh snapshot) neu bat
-    if (telegramConfig.autoSendEnabled && telegramConfig.botToken && telegramConfig.chatId) {
-      sendTelegram({
-        botToken: telegramConfig.botToken,
-        chatId: telegramConfig.chatId,
-        message,
-        image: annotatedImage,
-      })
-        .then((r) => {
-          if (r.ok) onNotify('Đã gửi Telegram cảnh báo (kèm ảnh).', 'success');
-          else onNotify(`Gửi Telegram thất bại: ${r.error || 'kiểm tra token/chat_id'}`, 'warn');
-        })
-        .catch((e) => onNotify(`Lỗi gửi Telegram: ${e.message}`, 'warn'));
-    }
   }
 
   // Khi tai anh tinh xong -> nhan dien mot lan

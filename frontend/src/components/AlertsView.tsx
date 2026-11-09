@@ -162,7 +162,7 @@ export default function AlertsView({
 
         {/* Zalo dispatch status */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider pl-1">Zalo Notification</label>
+          <label className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider pl-1">Trạng thái Telegram</label>
           <select 
             value={selectedZalo}
             onChange={(e) => setSelectedZalo(e.target.value)}
@@ -272,7 +272,7 @@ export default function AlertsView({
 
                   {/* Col 3: Zalo dispatch state */}
                   <div className="space-y-1 text-left">
-                    <p className="text-[9px] font-extrabold text-on-surface-variant/60 uppercase tracking-wider">Trạng thái Zalo</p>
+                    <p className="text-[9px] font-extrabold text-on-surface-variant/60 uppercase tracking-wider">Trạng thái Telegram</p>
                     <div className={`flex items-center gap-1.5 font-bold text-xs ${
                       alertItem.zaloSuccess === 'success' 
                         ? 'text-brand-green' 
