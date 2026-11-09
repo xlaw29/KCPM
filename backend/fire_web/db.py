@@ -2,6 +2,9 @@
 
 Dung sqlite3 trong thu vien chuan cua Python (khong can cai them gi).
 File CSDL nam o backend/data/fire_detection.db.
+
+Bang `detections` dong thoi la nhat ky su kien canh bao: moi ban ghi luu ca
+trang thai gui Telegram (none | pending | sent | failed) de tab Lich su hien thi.
 """
 
 import hashlib
@@ -22,6 +25,16 @@ _HASH_ALGO = "sha256"
 # SQLite khong an toan khi dung 1 connection tren nhieu luong => moi luong 1 conn.
 _local = threading.local()
 _db_path: Path = DEFAULT_DB_PATH
+
+# Gia tri hop le cho trang thai gui Telegram cua mot su kien canh bao.
+TELEGRAM_STATUSES = ("none", "pending", "sent", "failed")
+# Cot Telegram them sau (CSDL cu can duoc migrate khi khoi dong).
+_TELEGRAM_COLUMNS = {
+    "telegram_status": "TEXT NOT NULL DEFAULT 'none'",
+    "telegram_chat_id": "TEXT",
+    "telegram_error": "TEXT",
+    "telegram_sent_at": "TEXT",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -80,7 +93,12 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             source           TEXT NOT NULL DEFAULT 'camera',  -- camera | ip | upload
             acknowledged     INTEGER NOT NULL DEFAULT 0,
             acknowledged_by  TEXT,
-            created_at       TEXT NOT NULL
+            created_at       TEXT NOT NULL,
+            -- Nhat ky gui canh bao Telegram cua su kien nay.
+            telegram_status  TEXT NOT NULL DEFAULT 'none',  -- none | pending | sent | failed
+            telegram_chat_id TEXT,
+            telegram_error   TEXT,
+            telegram_sent_at TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_detections_created
@@ -91,9 +109,24 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
     )
     conn.commit()
 
+    # CSDL tao boi phien ban cu chua co cot Telegram -> bo sung them.
+    _migrate_detection_telegram_columns(conn)
+
     # Seed tai khoan mac dinh (khop voi man dang nhap cua frontend) neu chua co ai.
     if _count_users(conn) == 0:
         _seed_default_users(conn)
+
+
+def _migrate_detection_telegram_columns(conn: sqlite3.Connection) -> None:
+    """Them cac cot Telegram con thieu vao bang detections (CSDL cu)."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(detections)")}
+    for name, ddl in _TELEGRAM_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE detections ADD COLUMN {name} {ddl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_detections_telegram ON detections (telegram_status)"
+    )
+    conn.commit()
 
 
 def _seed_default_users(conn: sqlite3.Connection) -> None:
@@ -213,18 +246,21 @@ def insert_detection(
     image_path: Optional[str] = None,
     source: str = "camera",
     user_id: Optional[int] = None,
+    telegram_status: str = "none",
 ) -> dict[str, Any]:
-    """Luu 1 su kien phat hien chay/khoi vao CSDL."""
+    """Luu 1 su kien phat hien chay/khoi (kem trang thai gui canh bao)."""
+    if telegram_status not in TELEGRAM_STATUSES:
+        telegram_status = "none"
     conn = _connect()
     classes_csv = ",".join(detected_classes or [])
     cur = conn.execute(
         "INSERT INTO detections"
         " (user_id, camera_name, type, severity, confidence, detected_classes,"
-        "  box_count, image_path, source, created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "  box_count, image_path, source, created_at, telegram_status)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             user_id, camera_name, type, severity, float(confidence),
-            classes_csv, int(box_count), image_path, source, _now(),
+            classes_csv, int(box_count), image_path, source, _now(), telegram_status,
         ),
     )
     conn.commit()
@@ -247,7 +283,47 @@ def _detection_public(row: sqlite3.Row) -> dict[str, Any]:
         "acknowledged": bool(row["acknowledged"]),
         "acknowledged_by": row["acknowledged_by"],
         "created_at": row["created_at"],
+        "telegram_status": row["telegram_status"],
+        "telegram_chat_id": row["telegram_chat_id"],
+        "telegram_error": row["telegram_error"],
+        "telegram_sent_at": row["telegram_sent_at"],
     }
+
+
+def _detection_filters(
+    type: Optional[str] = None,
+    acknowledged: Optional[bool] = None,
+    camera: Optional[str] = None,
+    severity: Optional[str] = None,
+    search: Optional[str] = None,
+) -> tuple[str, list[Any]]:
+    """Dung menh de WHERE dung chung cho list/count."""
+    clauses: list[str] = []
+    params: list[Any] = []
+    if type:
+        clauses.append("type = ?")
+        params.append(type)
+    if severity:
+        clauses.append("severity = ?")
+        params.append(severity)
+    if acknowledged is not None:
+        clauses.append("acknowledged = ?")
+        params.append(1 if acknowledged else 0)
+    if camera:
+        clauses.append("camera_name LIKE ?")
+        params.append(f"%{camera}%")
+    if search:
+        clauses.append("(camera_name LIKE ? OR acknowledged_by LIKE ? OR type LIKE ?)")
+        params.extend([f"%{search}%"] * 3)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where, params
+
+
+def get_detection(detection_id: int) -> Optional[dict[str, Any]]:
+    """Lay chi tiet 1 su kien canh bao theo id."""
+    conn = _connect()
+    row = conn.execute("SELECT * FROM detections WHERE id = ?", (detection_id,)).fetchone()
+    return _detection_public(row) if row else None
 
 
 def list_detections(
@@ -255,23 +331,54 @@ def list_detections(
     offset: int = 0,
     type: Optional[str] = None,
     acknowledged: Optional[bool] = None,
+    camera: Optional[str] = None,
+    severity: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     conn = _connect()
-    clauses: list[str] = []
-    params: list[Any] = []
-    if type:
-        clauses.append("type = ?")
-        params.append(type)
-    if acknowledged is not None:
-        clauses.append("acknowledged = ?")
-        params.append(1 if acknowledged else 0)
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    where, params = _detection_filters(type, acknowledged, camera, severity, search)
     params.extend([max(1, min(500, limit)), max(0, offset)])
     rows = conn.execute(
         f"SELECT * FROM detections {where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
         params,
     ).fetchall()
     return [_detection_public(r) for r in rows]
+
+
+def count_detections(
+    type: Optional[str] = None,
+    acknowledged: Optional[bool] = None,
+    camera: Optional[str] = None,
+    severity: Optional[str] = None,
+    search: Optional[str] = None,
+) -> int:
+    """Dem tong so su kien khop bo loc (phuc vu phan trang)."""
+    conn = _connect()
+    where, params = _detection_filters(type, acknowledged, camera, severity, search)
+    return conn.execute(f"SELECT COUNT(*) AS n FROM detections {where}", params).fetchone()["n"]
+
+
+def record_telegram_result(
+    detection_id: int,
+    ok: bool,
+    error: Optional[str] = None,
+    chat_id: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Cap nhat ket qua gui Telegram cua 1 su kien canh bao."""
+    conn = _connect()
+    status = "sent" if ok else "failed"
+    conn.execute(
+        "UPDATE detections SET telegram_status = ?,"
+        " telegram_error = ?,"
+        " telegram_chat_id = COALESCE(?, telegram_chat_id),"
+        " telegram_sent_at = ?"
+        " WHERE id = ?",
+        (status, None if ok else (error or "Gửi Telegram thất bại."),
+         chat_id or None, _now() if ok else None, detection_id),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM detections WHERE id = ?", (detection_id,)).fetchone()
+    return _detection_public(row) if row else None
 
 
 def acknowledge_detection(detection_id: int, operator_name: str = "") -> Optional[dict[str, Any]]:
@@ -295,13 +402,20 @@ def detection_stats() -> dict[str, Any]:
     unack = conn.execute(
         "SELECT COUNT(*) AS n FROM detections WHERE acknowledged = 0"
     ).fetchone()["n"]
+    telegram_rows = conn.execute(
+        "SELECT telegram_status, COUNT(*) AS n FROM detections GROUP BY telegram_status"
+    ).fetchall()
     today = datetime.now(timezone.utc).date().isoformat()
     today_count = conn.execute(
         "SELECT COUNT(*) AS n FROM detections WHERE created_at LIKE ?", (f"{today}%",)
     ).fetchone()["n"]
+    by_telegram = {r["telegram_status"]: r["n"] for r in telegram_rows}
     return {
         "total": total,
         "today": today_count,
         "unacknowledged": unack,
         "by_type": {r["type"]: r["n"] for r in by_type_rows},
+        "by_telegram": by_telegram,
+        "telegram_sent": by_telegram.get("sent", 0),
+        "telegram_failed": by_telegram.get("failed", 0),
     }

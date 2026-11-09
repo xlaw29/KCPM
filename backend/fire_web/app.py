@@ -159,7 +159,14 @@ def create_app(
             {
                 "service": "fire-detection-api",
                 "ui": "smart-fire-monitoring (React, port 3000)",
-                "endpoints": ["/api/health", "/api/detect-frame", "/api/detect-upload", "/api/media/sample", "/api/zalo/send"],
+                "endpoints": [
+                    "/api/health",
+                    "/api/detect-frame",
+                    "/api/detect-upload",
+                    "/api/media/sample",
+                    "/api/telegram/send",
+                    "/api/detections",
+                ],
             }
         )
 
@@ -394,19 +401,51 @@ def create_app(
         return jsonify({"users": db.list_users()})
 
     # ------------------------------------------------------------------ #
-    # Lich su phat hien chay/khoi - luu vao SQLite
+    # Lich su phat hien chay/khoi - dong thoi la nhat ky su kien canh bao
     # ------------------------------------------------------------------ #
     @app.get("/api/detections")
     def get_detections():
         limit = request.args.get("limit", default=100, type=int)
         offset = request.args.get("offset", default=0, type=int)
         type_filter = request.args.get("type") or None
+        severity_filter = request.args.get("severity") or None
+        camera_filter = request.args.get("camera") or None
+        search = request.args.get("q") or None
         ack_arg = request.args.get("acknowledged")
         ack = None
         if ack_arg is not None:
             ack = ack_arg.lower() in {"1", "true", "yes"}
-        rows = db.list_detections(limit=limit, offset=offset, type=type_filter, acknowledged=ack)
-        return jsonify({"detections": rows})
+        rows = db.list_detections(
+            limit=limit,
+            offset=offset,
+            type=type_filter,
+            acknowledged=ack,
+            camera=camera_filter,
+            severity=severity_filter,
+            search=search,
+        )
+        total = db.count_detections(
+            type=type_filter,
+            acknowledged=ack,
+            camera=camera_filter,
+            severity=severity_filter,
+            search=search,
+        )
+        return jsonify(
+            {
+                "detections": rows,
+                "total": total,
+                "limit": max(1, min(500, limit)),
+                "offset": max(0, offset),
+            }
+        )
+
+    @app.get("/api/detections/<int:detection_id>")
+    def get_detection(detection_id):
+        record = db.get_detection(detection_id)
+        if record is None:
+            return jsonify({"error": "Không tìm thấy sự kiện."}), 404
+        return jsonify({"detection": record})
 
     @app.post("/api/detections")
     def create_detection():
@@ -418,6 +457,9 @@ def create_app(
         confidence = payload.get("confidence")
         confidence = float(confidence) if isinstance(confidence, (int, float)) else 0.0
         severity = str(payload.get("severity") or _severity_for(confidence, classes))
+        telegram_status = str(payload.get("telegram_status") or "none")
+        if telegram_status not in db.TELEGRAM_STATUSES:
+            telegram_status = "none"
         image_path = _save_snapshot(payload.get("image"))
         record = db.insert_detection(
             type=det_type,
@@ -429,8 +471,29 @@ def create_app(
             image_path=image_path,
             source=str(payload.get("source") or "camera"),
             user_id=payload.get("user_id"),
+            telegram_status=telegram_status,
         )
         return jsonify({"ok": True, "detection": record}), 201
+
+    @app.post("/api/detections/<int:detection_id>/telegram")
+    def record_telegram(detection_id):
+        """Ghi nhan ket qua gui canh bao Telegram cho 1 su kien."""
+        payload = request.get_json(silent=True) or {}
+        ok = payload.get("ok")
+        if isinstance(ok, str):
+            ok = ok.lower() in {"1", "true", "yes"}
+        if not isinstance(ok, bool):
+            return jsonify({"error": "Thiếu trạng thái gửi Telegram (ok: true/false)."}), 400
+        error = payload.get("error")
+        record = db.record_telegram_result(
+            detection_id,
+            ok=ok,
+            error=str(error) if error else None,
+            chat_id=str(payload.get("chat_id") or "").strip() or None,
+        )
+        if record is None:
+            return jsonify({"error": "Không tìm thấy sự kiện."}), 404
+        return jsonify({"ok": True, "detection": record})
 
     @app.post("/api/detections/<int:detection_id>/acknowledge")
     def ack_detection(detection_id):

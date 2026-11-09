@@ -23,6 +23,11 @@ export default defineConfig(() => {
           target: process.env.FIRE_API_URL || 'http://127.0.0.1:5001',
           changeOrigin: true,
         },
+        // Anh snapshot cua su kien canh bao (hien thi o tab Lich su).
+        '/static': {
+          target: process.env.FIRE_API_URL || 'http://127.0.0.1:5001',
+          changeOrigin: true,
+        },
       },
     },
   };

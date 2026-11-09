@@ -21,7 +21,13 @@ import HistoryView from './components/HistoryView';
 import TelegramConfigView from './components/TelegramConfigView';
 import SettingsView from './components/SettingsView';
 import { INITIAL_ALERTS } from './components/MockData';
-import { sendTelegram, saveDetection, AccountUser } from './api';
+import {
+  sendTelegram,
+  saveDetection,
+  reportTelegramResult,
+  acknowledgeDetection,
+  AccountUser,
+} from './api';
 import { Siren, AlertTriangle, ShieldCheck, X, CheckCircle } from 'lucide-react';
 
 export default function App() {
@@ -93,22 +99,88 @@ export default function App() {
     setAlerts(prev => [newAlert, ...prev]);
     triggerToast(`[CẢNH BÁO MỚI] Phát hiện ${newAlert.type === 'fire' ? 'Lửa' : 'Khói'} tại ${newAlert.cameraName}!`, 'warn');
 
-    // Luu co dinh su kien vao CSDL SQLite o backend.
+    const updateAlert = (patch: Partial<AlertEvent>) => {
+      setAlerts(prev => prev.map(a => (a.id === newAlert.id ? { ...a, ...patch } : a)));
+    };
+
     const severityMap: Record<string, number> = { critical: 0.9, high: 0.75, medium: 0.55, low: 0.4 };
+    const confidence = newAlert.confidence ?? severityMap[newAlert.severity] ?? 0.5;
+    const imageData =
+      newAlert.imageUrl?.startsWith('data:image/') ? newAlert.imageUrl : undefined;
+    const canSendTelegram =
+      telegramConfig.autoSendEnabled &&
+      Boolean(telegramConfig.botToken) &&
+      Boolean(telegramConfig.chatId);
+    const typeLabel = newAlert.type === 'fire' ? 'LỬA/CHÁY' : 'KHÓI';
+    const message =
+      `🔥 CẢNH BÁO ${typeLabel} tại ${newAlert.cameraName}. ` +
+      `Độ tin cậy ${Math.round(confidence * 100)}%. ` +
+      `Thời gian ${newAlert.timestamp} ${newAlert.date}. Vui lòng kiểm tra ngay!`;
+
+    // 1) Ghi nhat ky su kien canh bao vao CSDL (kem trang thai gui Telegram).
     saveDetection({
       type: newAlert.type,
-      confidence: severityMap[newAlert.severity] ?? 0.5,
+      confidence,
+      severity: newAlert.severity,
       camera_name: newAlert.cameraName,
       detected_classes: [newAlert.type],
       source: 'camera',
-      image: newAlert.imageUrl?.startsWith('data:image/') ? newAlert.imageUrl : undefined,
+      image: imageData,
       user_id: currentUser?.id,
-    }).catch(() => {
-      // khong chan luong neu backend loi; chi bo qua viec luu.
-    });
+      telegram_status: canSendTelegram ? 'pending' : 'none',
+    })
+      .then(async (record) => {
+        updateAlert({ detectionId: record.id });
+
+        if (!canSendTelegram) {
+          updateAlert({ zaloStatus: 'Chưa bật gửi Telegram', zaloSuccess: 'none' });
+          return;
+        }
+
+        // 2) Gui canh bao Telegram that su (kem anh snapshot).
+        try {
+          const result = await sendTelegram({
+            botToken: telegramConfig.botToken,
+            chatId: telegramConfig.chatId,
+            message,
+            image: imageData,
+          });
+          // 3) Ghi lai ket qua gui vao nhat ky.
+          await reportTelegramResult({
+            id: record.id,
+            ok: result.ok,
+            error: result.error,
+            chatId: telegramConfig.chatId,
+          }).catch(() => {});
+
+          if (result.ok) {
+            updateAlert({ zaloStatus: 'Đã gửi Telegram', zaloSuccess: 'success' });
+            triggerToast('Đã gửi Telegram cảnh báo (kèm ảnh).', 'success');
+          } else {
+            const detail = result.error || 'kiểm tra token/chat_id';
+            updateAlert({ zaloStatus: `Gửi lỗi: ${detail}`, zaloSuccess: 'error' });
+            triggerToast(`Gửi Telegram thất bại: ${detail}`, 'warn');
+          }
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : 'không xác định';
+          await reportTelegramResult({
+            id: record.id,
+            ok: false,
+            error: detail,
+            chatId: telegramConfig.chatId,
+          }).catch(() => {});
+          updateAlert({ zaloStatus: `Lỗi gửi: ${detail}`, zaloSuccess: 'error' });
+          triggerToast(`Lỗi gửi Telegram: ${detail}`, 'warn');
+        }
+      })
+      .catch(() => {
+        // khong chan luong giam sat neu backend loi; chi bao trang thai.
+        updateAlert({ zaloStatus: 'Không lưu được vào CSDL', zaloSuccess: 'error' });
+      });
   };
 
   const handleAcknowledgeAlert = (id: string, operatorName: string) => {
+    const target = alerts.find(a => a.id === id);
     setAlerts(prev => prev.map(a => {
       if (a.id === id) {
         return {
@@ -119,6 +191,10 @@ export default function App() {
       }
       return a;
     }));
+    // Dong bo trang thai xac nhan xuong CSDL neu su kien da duoc luu.
+    if (target?.detectionId) {
+      acknowledgeDetection(target.detectionId, operatorName).catch(() => {});
+    }
     triggerToast(`Đã phê duyệt xác minh xử lý cho sự cố: ${id}`, 'success');
   };
 
@@ -196,7 +272,6 @@ export default function App() {
             setActiveTab={handleSetActiveTab}
             systemSettings={systemSettings}
             telegramConfig={telegramConfig}
-            onNotify={triggerToast}
           />
         );
       case AppTab.ALERTS:
@@ -210,7 +285,7 @@ export default function App() {
       case AppTab.HISTORY:
         return (
           <HistoryView 
-            alerts={alerts}
+            operatorName={currentUser?.full_name || currentUser?.email || 'Quản trị viên'}
           />
         );
       case AppTab.ZALO_CONFIG:

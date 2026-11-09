@@ -127,6 +127,54 @@
       "response": []
     },
     {
+      "name": "05a - Get Detection Detail",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/detections/1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detections",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "05b - Record Telegram Result",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"ok\": true,\r\n  \"chat_id\": \"123456789\",\r\n  \"error\": null\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/detections/1/telegram",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "detections",
+            "1",
+            "telegram"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
       "name": "06 - Acknowledge Detection",
       "request": {
         "method": "POST",

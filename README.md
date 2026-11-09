@@ -112,6 +112,10 @@ Vào tab **Cấu hình Telegram** → dán **Bot Token** (tạo từ **@BotFathe
 Từ đó mỗi lần phát hiện cháy, hệ thống tự gửi ảnh cảnh báo về Telegram của bạn.
 Token chỉ lưu trong trình duyệt, **không** nằm trong mã nguồn.
 
+Mỗi sự kiện cảnh báo được ghi thành một bản ghi trong CSDL kèm **trạng thái gửi Telegram**
+(`Đã gửi` / `Gửi lỗi` / `Chưa bật gửi`), thời điểm gửi và lỗi (nếu có). Vào tab **Lịch sử**
+để xem lại, lọc theo loại sự cố/trạng thái xử lý và xuất CSV.
+
 ---
 
 ## ❓ Lỗi thường gặp
@@ -137,8 +141,10 @@ Token chỉ lưu trong trình duyệt, **không** nằm trong mã nguồn.
 | `POST /api/auth/register` | Đăng ký tài khoản mới (lưu vào CSDL) |
 | `POST /api/auth/login` | Đăng nhập (kiểm tra với CSDL) |
 | `GET  /api/users` | Danh sách tài khoản |
-| `GET  /api/detections` | Lịch sử phát hiện (lọc `?type=`, `?acknowledged=`, `?limit=`) |
-| `POST /api/detections` | Lưu 1 sự kiện phát hiện cháy/khói (kèm snapshot) |
+| `GET  /api/detections` | Lịch sử phát hiện (lọc `?type=`, `?severity=`, `?camera=`, `?q=`, `?acknowledged=`, `?limit=`, `?offset=`) → kèm `total` để phân trang |
+| `GET  /api/detections/<id>` | Chi tiết 1 sự kiện cảnh báo |
+| `POST /api/detections` | Lưu 1 sự kiện phát hiện cháy/khói (kèm snapshot, `telegram_status`) |
+| `POST /api/detections/<id>/telegram` | Ghi nhận kết quả gửi Telegram (`ok`, `chat_id`, `error`) |
 | `POST /api/detections/<id>/acknowledge` | Xác nhận (duyệt) một sự kiện |
 | `GET  /api/stats` | Thống kê nhanh cho dashboard |
 
@@ -153,7 +159,7 @@ thêm** phần mềm CSDL nào. File tự tạo lần đầu chạy backend.
 | Bảng | Nội dung |
 |---|---|
 | `users` | Tài khoản: email, mật khẩu (băm PBKDF2-SHA256 + salt), họ tên, vai trò, thời điểm tạo/đăng nhập |
-| `detections` | Mỗi lần phát hiện: loại (cháy/khói), độ tin cậy, mức độ, camera, số box, ảnh snapshot, đã xác nhận hay chưa, thời gian |
+| `detections` | Mỗi lần phát hiện: loại (cháy/khói), độ tin cậy, mức độ, camera, số box, ảnh snapshot, đã xác nhận hay chưa, thời gian, **trạng thái gửi Telegram** (`none`/`pending`/`sent`/`failed`), chat ID, lỗi và thời điểm gửi |
 
 **Tài khoản mặc định** (tự tạo lần đầu):
 

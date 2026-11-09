@@ -35,6 +35,10 @@ export interface AlertEvent {
   acknowledged: boolean;
   acknowledgedBy?: string;
   imageUrl: string;
+  // Do tin cay cao nhat cua model (0..1) - dung khi ghi nhat ky su kien.
+  confidence?: number;
+  // Id ban ghi trong CSDL sau khi luu thanh cong.
+  detectionId?: number;
 }
 
 export interface ZaloConfig {
