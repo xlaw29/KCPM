@@ -29,6 +29,13 @@ import {
   Detection,
   checkHealth,
 } from '../api';
+import {
+  ALERT_COOLDOWN_MS,
+  classifySeverity,
+  evaluateAlert,
+  isCooldownElapsed,
+  isTelegramReady,
+} from '../alerts';
 
 type SourceMode = 'webcam' | 'ip' | 'upload';
 type CamKind = 'device' | 'ip';
@@ -44,7 +51,6 @@ interface CameraMonitorViewProps {
   telegramConfig: TelegramConfig;
 }
 
-const ALERT_COOLDOWN_MS = 8000;
 const DETECT_INTERVAL_MS = 800;
 
 export default function CameraMonitorView({
@@ -243,33 +249,18 @@ export default function CameraMonitorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMonitoring, sourceMode, uploadIsImage, fireThreshold, smokeThreshold]);
 
-  const evaluateAlert = (dets: Detection[]) => {
-    let alert = false;
-    let highest = 0;
-    const triggered: string[] = [];
-    for (const d of dets) {
-      const name = d.class_name.toLowerCase();
-      const threshold = name === 'fire' ? fireThreshold : name === 'smoke' ? smokeThreshold : 1;
-      if (name === 'fire' || name === 'smoke') {
-        highest = Math.max(highest, d.confidence);
-        if (d.confidence >= threshold) {
-          alert = true;
-          if (!triggered.includes(name)) triggered.push(name);
-        }
-      }
-    }
-    return { alert, highest, triggered };
-  };
-
   // Xu ly ket qua nhan dien chung (dung cho ca webcam va IP)
   function applyResult(result: { detections: Detection[]; image: string }) {
     setBackendError(null);
     setDetections(result.detections);
     setDisplayImage(result.image);
-    const { alert, highest, triggered } = evaluateAlert(result.detections);
+    const { alert, highest, triggered } = evaluateAlert(result.detections, {
+      fire: fireThreshold,
+      smoke: smokeThreshold,
+    });
     setHighestConf(highest);
     setIsAlert(alert);
-    if (alert && Date.now() - lastAlertRef.current > ALERT_COOLDOWN_MS) {
+    if (alert && isCooldownElapsed(lastAlertRef.current, Date.now(), ALERT_COOLDOWN_MS)) {
       lastAlertRef.current = Date.now();
       raiseAlert(triggered, highest, result.image);
     }
@@ -332,14 +323,14 @@ export default function CameraMonitorView({
   function raiseAlert(triggered: string[], highest: number, annotatedImage: string) {
     const type: AlertEvent['type'] = triggered.includes('fire') ? 'fire' : 'smoke';
     const now = new Date();
-    const willNotify = telegramConfig.autoSendEnabled && Boolean(telegramConfig.botToken) && Boolean(telegramConfig.chatId);
+    const willNotify = isTelegramReady(telegramConfig);
     const alertEvent: AlertEvent = {
       id: `${type === 'fire' ? 'FIRE' : 'SMOK'}-${Math.floor(1000 + Math.random() * 9000)}`,
       timestamp: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       cameraName: `${activeCamId} (${activeCamLabel})`,
       type,
-      severity: type === 'fire' ? 'critical' : 'high',
+      severity: classifySeverity(triggered, highest),
       zaloStatus: willNotify ? 'Đang gửi Telegram...' : 'Chưa bật gửi Telegram',
       zaloSuccess: 'none',
       acknowledged: false,

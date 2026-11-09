@@ -4,8 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Send, Save, Check, Eye, EyeOff, Rocket, ChevronRight } from 'lucide-react';
+import { Send, Save, Check, Eye, EyeOff, Rocket, ChevronRight, AlertTriangle } from 'lucide-react';
 import { TelegramConfig } from '../types';
+import { validateTelegramConfig } from '../alerts';
 
 interface TelegramConfigViewProps {
   config: TelegramConfig;
@@ -25,10 +26,15 @@ export default function TelegramConfigView({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+
+  // Kiem tra dinh dang Bot Token / Chat ID truoc khi luu hoac gui thu.
+  const errors = validateTelegramConfig({ botToken, chatId });
+  const hasErrors = Boolean(errors.botToken || errors.chatId);
 
   const handleSave = () => {
-    if (!botToken.trim() || !chatId.trim()) {
-      alert('Vui lòng nhập Bot Token và Chat ID Telegram.');
+    if (hasErrors) {
+      setShowErrors(true);
       return;
     }
     onSaveConfig({ botToken: botToken.trim(), chatId: chatId.trim(), autoSendEnabled });
@@ -38,6 +44,10 @@ export default function TelegramConfigView({
 
   const handleTest = () => {
     if (isTesting) return;
+    if (hasErrors) {
+      setShowErrors(true);
+      return;
+    }
     setIsTesting(true);
     setTestSuccess(false);
     Promise.resolve(onSendTestMessage()).finally(() => {
@@ -91,6 +101,11 @@ export default function TelegramConfigView({
                     {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {showErrors && errors.botToken && (
+                  <p className="text-[10px] font-bold text-red-400 flex items-center gap-1 pl-1 pt-1">
+                    <AlertTriangle className="w-3 h-3" /> {errors.botToken}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5 text-left">
@@ -108,6 +123,11 @@ export default function TelegramConfigView({
                   * Lấy Chat ID bằng cách nhắn cho bot, rồi mở:
                   https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
                 </p>
+                {showErrors && errors.chatId && (
+                  <p className="text-[10px] font-bold text-red-400 flex items-center gap-1 pl-1 pt-1">
+                    <AlertTriangle className="w-3 h-3" /> {errors.chatId}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between p-4 bg-surface-low/50 rounded-xl border border-white/5 shadow-md">

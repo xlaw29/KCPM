@@ -21,6 +21,7 @@ import HistoryView from './components/HistoryView';
 import TelegramConfigView from './components/TelegramConfigView';
 import SettingsView from './components/SettingsView';
 import { INITIAL_ALERTS } from './components/MockData';
+import { buildAlertMessage, isTelegramReady } from './alerts';
 import {
   sendTelegram,
   saveDetection,
@@ -107,15 +108,14 @@ export default function App() {
     const confidence = newAlert.confidence ?? severityMap[newAlert.severity] ?? 0.5;
     const imageData =
       newAlert.imageUrl?.startsWith('data:image/') ? newAlert.imageUrl : undefined;
-    const canSendTelegram =
-      telegramConfig.autoSendEnabled &&
-      Boolean(telegramConfig.botToken) &&
-      Boolean(telegramConfig.chatId);
-    const typeLabel = newAlert.type === 'fire' ? 'LỬA/CHÁY' : 'KHÓI';
-    const message =
-      `🔥 CẢNH BÁO ${typeLabel} tại ${newAlert.cameraName}. ` +
-      `Độ tin cậy ${Math.round(confidence * 100)}%. ` +
-      `Thời gian ${newAlert.timestamp} ${newAlert.date}. Vui lòng kiểm tra ngay!`;
+    const canSendTelegram = isTelegramReady(telegramConfig);
+    const message = buildAlertMessage({
+      type: newAlert.type,
+      cameraName: newAlert.cameraName,
+      confidence,
+      time: newAlert.timestamp,
+      date: newAlert.date,
+    });
 
     // 1) Ghi nhat ky su kien canh bao vao CSDL (kem trang thai gui Telegram).
     saveDetection({

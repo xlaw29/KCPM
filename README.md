@@ -171,6 +171,20 @@ thêm** phần mềm CSDL nào. File tự tạo lần đầu chạy backend.
 Ảnh snapshot của mỗi cảnh báo được lưu ở `backend/static/snapshots/`. Cả file CSDL và
 thư mục snapshot đều đã được `.gitignore` bỏ qua (dữ liệu runtime, không commit).
 
+## Kiểm thử
+
+```bash
+# Backend: nhật ký sự kiện + API cảnh báo/Telegram
+cd backend
+python -m unittest discover -s tests -p "test_alert_*.py" -v
+
+# Frontend: quy tắc kích hoạt, mức độ, cooldown, cấu hình Telegram
+cd frontend
+npm test
+```
+
+Tài liệu 22 test case (F52–F73): **[docs/test-cases/alert-telegram.md](docs/test-cases/alert-telegram.md)**.
+
 ## Biến môi trường (tùy chọn)
 
 ```bash
